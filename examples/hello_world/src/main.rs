@@ -4,25 +4,40 @@ extern crate futures;
 extern crate gotham;
 extern crate hyper;
 extern crate mime;
+extern crate tokio_core;
 
-use hyper::{Response, StatusCode};
+use hyper::StatusCode;
+use hyper::client::Client;
 
 use gotham::http::response::create_response;
 use gotham::state::State;
-
+use gotham::handler::HandlerFuture;
+use tokio_core::reactor::Handle;
+use futures::{future, Future};
 /// Create a `Handler` which is invoked when responding to a `Request`.
 ///
 /// How does a function become a `Handler`?.
 /// We've simply implemented the `Handler` trait, for functions that match the signature used here,
 /// within Gotham itself.
-pub fn say_hello(state: State) -> (State, Response) {
-    let res = create_response(
-        &state,
-        StatusCode::Ok,
-        Some((String::from("Hello World!").into_bytes(), mime::TEXT_PLAIN)),
-    );
+fn say_hello(state: State) -> Box<HandlerFuture> {
+    let work = {
+        let handle = state.borrow::<Handle>();
+        let client = Client::new(&handle);
 
-    (state, res)
+        client
+            .get("http://httpbin.org/get".parse().unwrap())
+            .and_then(|res| {
+                println!("Response: {}", res.status());
+                future::ok(b"ui".to_vec())
+            })
+    };
+
+    let work = work.then(|_| {
+        let resp = create_response(&state, StatusCode::Ok, Some((vec![], mime::TEXT_PLAIN)));
+        future::ok((state, resp))
+    });
+
+    Box::new(work)
 }
 
 /// Start a server and call the `Handler` we've defined above for each `Request` we receive.

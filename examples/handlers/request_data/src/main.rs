@@ -2,17 +2,21 @@
 
 extern crate futures;
 extern crate gotham;
+#[macro_use]
+extern crate gotham_derive;
 extern crate hyper;
 extern crate mime;
+extern crate serde_json;
 
 use hyper::{Body, Headers, HttpVersion, Method, Response, StatusCode, Uri};
-use futures::{future, Future, Stream};
+use futures::{future, stream, Future, Stream};
 
 use gotham::http::response::create_response;
 use gotham::state::{FromState, State};
 use gotham::router::Router;
 use gotham::router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes};
 use gotham::handler::{HandlerFuture, IntoHandlerError};
+use serde_json::Value;
 
 /// Extract the main elements of the request except for the `Body`
 fn print_request_elements(state: &State) {
@@ -26,19 +30,49 @@ fn print_request_elements(state: &State) {
     println!("Headers: {:?}", headers);
 }
 
+#[derive(StateData)]
+struct EntryData {
+    value: Value,
+}
+
+fn entry_handler(state: State) -> Box<HandlerFuture> {
+    {
+        let entry = EntryData::borrow_from(&state);
+        println!("Entry: {:?}", entry.value);
+    }
+    // HACK: response is created every time the loop iterates
+    // and once at the start, even though we only use the last one
+    let res = create_response(&state, StatusCode::Ok, None);
+    let f = future::ok((state, res));
+    Box::new(f)
+}
+
 /// Extracts the elements of the POST request and prints them
 fn post_handler(mut state: State) -> Box<HandlerFuture> {
     print_request_elements(&state);
     let f = Body::take_from(&mut state)
         .concat2()
-        .then(|full_body| match full_body {
-            Ok(valid_body) => {
-                let body_content = String::from_utf8(valid_body.to_vec()).unwrap();
-                println!("Body: {}", body_content);
-                let res = create_response(&state, StatusCode::Ok, None);
-                future::ok((state, res))
+        .then(|full_body| -> Box<HandlerFuture> {
+            match full_body {
+                Ok(valid_body) => {
+                    let body_content: Value = serde_json::from_slice(&valid_body).unwrap();
+                    println!("Body: {:?}", body_content);
+                    if let Value::Array(ref entries) = body_content["entry"] {
+                        // HACK: response is created every time the loop iterates
+                        // and once at the start, even though we only use the last one
+                        let res = create_response(&state, StatusCode::Ok, None);
+                        let stream = stream::iter_ok(entries.clone());
+                        Box::new(stream.fold((state, res), |(mut state, _), value| {
+                            state.put(EntryData { value });
+                            entry_handler(state)
+                        }))
+                    } else {
+                        let res = create_response(&state, StatusCode::Ok, None);
+                        Box::new(future::ok((state, res)))
+                    }
+                }
+                Err(e) => Box::new(future::err((state, e.into_handler_error()))),
             }
-            Err(e) => return future::err((state, e.into_handler_error())),
         });
 
     Box::new(f)
@@ -91,7 +125,11 @@ mod tests {
         let test_server = TestServer::new(router()).unwrap();
         let response = test_server
             .client()
-            .post("http://localhost", None, mime::TEXT_PLAIN)
+            .post(
+                "http://localhost",
+                r#"{"entry": [1, 2, 3]}"#,
+                mime::TEXT_PLAIN,
+            )
             .perform()
             .unwrap();
 

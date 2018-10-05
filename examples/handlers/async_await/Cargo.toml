@@ -1,9 +1,14 @@
 [package]
-name = "gotham_examples_handlers_async_handlers"
+name = "gotham_examples_handlers_async_await"
+edition = "2018"
 description = "An example that does asynchronous work before responding"
 version = "0.0.0"
 authors = ["David Laban <alsuren@gmail.com>"]
 publish = false
+
+# Used to escape the parent workspace. This crate uses edition 2018 and the
+# parent does not.
+[workspace]
 
 [dependencies]
 gotham = { path = "../../../gotham" }

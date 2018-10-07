@@ -1,4 +1,5 @@
 //! A basic example showing the request components
+#![feature(async_await, futures_api, await_macro)]
 
 extern crate futures;
 extern crate gotham;
@@ -9,12 +10,15 @@ extern crate mime;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate tokio;
+extern crate tokio_async_await;
 
 use futures::{stream, Future, Stream};
 use std::time::{Duration, Instant};
 
 use hyper::StatusCode;
+use hyper::{Body, Response};
 
 use gotham::handler::{HandlerError, HandlerFuture, IntoHandlerError};
 use gotham::helpers::http::response::create_response;
@@ -24,6 +28,7 @@ use gotham::router::Router;
 use gotham::state::{FromState, State};
 
 use tokio::timer::Delay;
+use tokio_async_await::compat::backward;
 
 type SleepFuture = Box<Future<Item = Vec<u8>, Error = HandlerError> + Send>;
 
@@ -83,14 +88,17 @@ fn sleep_handler(mut state: State) -> Box<HandlerFuture> {
     // `state` is moved in, so that we can return it, and we convert any errors
     // that we have into the form that Hyper expects, using the helper from
     // IntoHandlerError.
-    Box::new(sleep_future.then(move |result| match result {
-        Ok(data) => {
-            let res = create_response(&state, StatusCode::OK, (data, mime::TEXT_PLAIN));
-            println!("sleep for {} seconds once: finished", seconds);
-            Ok((state, res))
-        }
-        Err(err) => Err((state, err.into_handler_error())),
-    }))
+    let f = async move {
+        match await!(sleep_future) {
+            Ok(data) => {
+                let res = create_response(&state, StatusCode::OK, (data, mime::TEXT_PLAIN));
+                println!("sleep for {} seconds once: finished", seconds);
+                Ok((state, res))
+            }
+                Err(err) => Err((state, err.into_handler_error())),
+            }
+    };
+    Box::new(backward::Compat::new(f))
 }
 
 /// This example uses a `future::Stream` to implement a `for` loop. It calls sleep(1)

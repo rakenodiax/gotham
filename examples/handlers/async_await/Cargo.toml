@@ -1,5 +1,5 @@
 [package]
-name = "gotham_examples_handlers_simple_async_handlers"
+name = "gotham_examples_handlers_async_await"
 edition = "2018"
 description = "An example that does asynchronous work before responding"
 version = "0.0.0"
@@ -19,4 +19,5 @@ mime = "0.3"
 futures = "0.1"
 serde = "1.0"
 serde_derive = "1.0"
-tokio = "0.1"
+tokio = {version = "0.1", features = ["async-await-preview"] }
+tokio-async-await = { version = "0.1"}

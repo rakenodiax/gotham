@@ -52,6 +52,9 @@ members = [
     "examples/handlers/simple_async_handlers",
     "examples/handlers/async_handlers",
     "examples/handlers/form_urlencoded",
+    # When async/await stablilises, remove the [workspace] hack
+    # from the Cargo.toml and uncomment this line.
+    # "examples/handlers/async_await",
 
     # static_assets
     "examples/static_assets",

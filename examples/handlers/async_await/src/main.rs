@@ -118,6 +118,16 @@ fn sleep_handler(mut state: State) -> Box<HandlerFuture> {
     Box::new(backward::Compat::new(f))
 }
 
+macro_rules! handler_try {
+    ($state: expr, $expr:expr) => (match $expr {
+        Ok(val) => val,
+        Err(err) => {
+            return Err(($state, From::from(err)))
+        }
+    });
+    ($expr:expr,) => (try!($expr));
+}
+
 /// This example uses a `future::Stream` to implement a `for` loop. It calls sleep(1)
 /// as many times as needed to make the requested duration.
 ///
@@ -132,20 +142,20 @@ fn loop_handler(mut state: State) -> Box<HandlerFuture> {
 
         let mut accumulator = Vec::new();
         for _ in 0..seconds {
-            // It may be that this could be refactored into a
-            // `gotham_try(expression, state)` macro, if you get bored of writing
-            // this match block over and over again. The loop body would then become:
-            //     let text = gotham_try!(await!(sleep(1)), state);
-            //     accumulator.extend(text);
-            let sleep_result = await!(sleep(1));
-            match sleep_result {
-                Ok(body) => {
-                    accumulator.extend(body);
-                },
-                Err(err) => {
-                    return Err((state, err));
-                }
-            };
+            // You could do this using the following match expression:
+            //     let sleep_result = await!(sleep(1));
+            //     match sleep_result {
+            //         Ok(body) => {
+            //             accumulator.extend(body);
+            //         },
+            //         Err(err) => {
+            //             return Err((state, err));
+            //         }
+            //     };
+            // but this quickly gets boring, so we use a macro instead:
+            let text = handler_try!(state, await!(sleep(1)));
+
+            accumulator.extend(text);
         }
         println!("sleep for one second {} times: finished", seconds);
         // Error cases are all handled above, so we only need to translate the response here.

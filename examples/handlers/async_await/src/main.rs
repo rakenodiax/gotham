@@ -108,7 +108,7 @@ fn sleep_handler(mut state: State) -> Box<HandlerFuture> {
         // IntoHandlerError.
         match sleep_result {
             Ok(data) => {
-                let res = create_response(&state, StatusCode::OK, (data, mime::TEXT_PLAIN));
+                let res = create_response(&state, StatusCode::OK, mime::TEXT_PLAIN, data);
                 println!("sleep for {} seconds once: finished", seconds);
                 Ok((state, res))
             }
@@ -149,7 +149,7 @@ fn loop_handler(mut state: State) -> Box<HandlerFuture> {
         }
         println!("sleep for one second {} times: finished", seconds);
         // Error cases are all handled above, so we only need to translate the response here.
-        let res = create_response(&state, StatusCode::OK, (accumulator, mime::TEXT_PLAIN));
+        let res = create_response(&state, StatusCode::OK, mime::TEXT_PLAIN, accumulator);
         Ok((state, res))
     };
 

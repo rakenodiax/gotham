@@ -1,6 +1,6 @@
 //! An example showing the request components implemented using
 //! async and await!()
-#![feature(async_await, futures_api, await_macro)]
+#![feature(async_await, futures_api, await_macro, trait_alias)]
 
 extern crate futures;
 extern crate gotham;
@@ -34,7 +34,9 @@ use gotham::state::{FromState, State};
 use tokio::timer::Delay;
 use tokio_async_await::compat::backward;
 
-type SleepFuture = Box<Future<Item = Vec<u8>, Error = HandlerError> + Send>;
+/// We define a trait alias for the thing that sleep() returns, below.
+/// This avoids a Box::new() compared to simple_async_handlers.
+trait SleepFuture = Future<Item = Vec<u8>, Error = HandlerError> + Send;
 
 #[derive(Deserialize, StateData, StaticResponseExtender)]
 struct QueryStringExtractor {
@@ -60,7 +62,7 @@ fn get_duration(seconds: &u64) -> Duration {
 /// web apis) can be coerced into returning futures that yield useful data,
 /// so the patterns that you learn in this example should be applicable to
 /// real world problems.
-fn sleep(seconds: u64) -> SleepFuture {
+fn sleep(seconds: u64) -> impl SleepFuture {
     let when = Instant::now() + get_duration(&seconds);
     let delay = Delay::new(when)
         .map_err(|e| panic!("timer failed; err={:?}", e))
@@ -70,7 +72,7 @@ fn sleep(seconds: u64) -> SleepFuture {
                 .to_vec())
         });
 
-    Box::new(delay)
+    delay
 }
 
 /// This handler sleeps for the requested number of seconds, using the `sleep()`
